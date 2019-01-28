@@ -3,7 +3,7 @@
 import struct
 import zlib
 from shockabsorber.model.sections import Section, SectionMap
-from shockabsorber.loader.util import SeqBuffer
+from shockabsorber.loader.util import SeqBuffer, rev
 
 class SectionMapImpl(SectionMap):  #------------------------------
     def __init__(self, entries):
@@ -129,11 +129,16 @@ def create_section_map(f, loader_context):
             sect_data = zlib.decompress(sect_data)
             print "ssize decompressed=%d" % (len(sect_data))
         elif stag == "ABMP":
-            sect_data = zlib.decompress(sect_data[3:])
-            print "ssize decompressed=%d" % (len(sect_data))
+            buf = SeqBuffer(sect_data)
+            sect_data_null = buf.unpackVarint()
+            sect_data_size = buf.unpackVarint()
+            sect_data = zlib.decompress(buf.peek_bytes_left())
+            del buf
+            print "ssize decompressed=%d=%d" % (sect_data_size, len(sect_data))
             abmp = parse_abmp_section(sect_data, f)
             print "DB| ABMP: %s" % abmp
-        print "DB| %s -> %s" % (stag, sect_data)
+        if stag != "ABMP":
+            print "DB| %s -> %s" % (stag, sect_data)
     section_base_pos = f.tell()
 
     # entries_by_nr = {}
@@ -198,12 +203,9 @@ def read_ILS_section_into(ils_data, entries_by_nr, dest):
         data = buf.readBytes(section.size)
         section.set_bytes(data)
 
-def rev(s):
-    return s[::-1]
-
-def read_varint(f):
+def read_varint(f, st=0):
     d = ord(f.read(1))
     if d<128:
-        return d
+        return d+st
     else:
-        return ((d-128)<<7) + read_varint(f)
+        return read_varint(f, (st|d&127)<<7)
