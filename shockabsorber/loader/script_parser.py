@@ -247,6 +247,7 @@ OPCODE_SPEC = {
     #0x6d: () -> number
 
     0x70: ("Get-special-field", ['sym8']), 0xb0: ("Get-special-field", ['sym16']),
+    0xb2: ("int16 ???", ['int16']),
     0xef: ("Push-int-32?", ['int32']),
     0xf1: ("Push-float", ['float32']),
 }

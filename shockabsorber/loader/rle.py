@@ -1,13 +1,16 @@
 import pyglet.image
 
-# Return a bytearray
-def rle_to_image(width, height, fullwidth, bpp, encoded_data):
-    return bytes_to_image(rle_decode(width, height, fullwidth, bpp, encoded_data))
-
-def bytes_to_image(image_data):
+def bytes_to_image(image_data, clut=None):
     if image_data==None: return None
     (width, height, fullwidth, bpp, pixdata) = image_data
-    if bpp == 8:
+    pixdata = bytearray(pixdata)
+    if len(pixdata) < fullwidth*height:
+        print(len(pixdata), fullwidth*height, width*height*bpp//8)
+        print("Warning: too short pixel data (%d%%)" % (100*len(pixdata)//(fullwidth*height)))
+        pixdata += b'\0'*(fullwidth*height-len(pixdata))
+    if clut:
+        return make_clut_image(width, height, fullwidth, pixdata, clut, bpp)
+    elif bpp == 8:
         return make_8bit_rbg_image(width, height, fullwidth, pixdata)
     elif bpp == 16:
         return make_16bit_rbg_image(width, height, fullwidth, pixdata)
@@ -32,50 +35,71 @@ def bytes_and_mask_to_image(image_data, mask_data):
         print "Warning: RLE: Unknown bpp: %d / %d" % (bpp,bpp2)
         return make_greyscale_image(width, height, fullwidth, pixdata) # TODO
 
-# Returns an ImageData
-def rle_decode(width, height, fullwidth, bpp, encoded_data):
-    bytes_to_output = fullwidth*height
-    res = bytearray(bytes_to_output)
-    in_pos = 0; in_len = len(encoded_data)
-    out_pos = 0
-    #x = 0; y = 0
-    #fullwidth = width*(bpp//8)
-    while in_pos < in_len and out_pos < bytes_to_output:
-        d = ord(encoded_data[in_pos]); in_pos+=1
-        if d >= 128:
-            run_length = 257-d
-            v = encoded_data[in_pos]; in_pos+=1
-            for i in range(run_length):
-                res[out_pos+i] = v
-            out_pos += run_length
-        else:
-            lit_length = 1+d
-            res[out_pos:out_pos+lit_length] = encoded_data[in_pos:in_pos+lit_length]
-            in_pos += lit_length
-            out_pos += lit_length
-    print "DB| rle end: out_pos: %d vs. expected %d; in_pos: %d vs. %d" % (out_pos, bytes_to_output, in_pos, in_len)
-    #print "DB| rle: converted %s to %s" % (encoded_data, res)
-    return (width, height, fullwidth, bpp, res)
-
 def make_greyscale_image(width, height, fullwidth, data):
     return pyglet.image.ImageData(width, height, 'I', data, -fullwidth)
 
-def make_8bit_rbg_image(width, height, fullwidth, data):
-    # TODO: This is the wrong palette.
-    color_data = ""
-    for c in data:
-        nr = c
-        r = nr >> 5
-        g = (nr >> 2) & 7
-        b = nr & 3
-        #r = nr // 36
-        #g = (nr // 6) % 6
-        #b = nr % 6
-        #if r>5: r=5; g=5; b=5
-        color_data += chr(r*(255//7))
-        color_data += chr(g*(255//7))
-        color_data += chr(b*(255//3))
+clut = bytearray()
+# WARNING: this is the windows system palette (code: -101)
+# The palette is kinda strange:
+# 0..6 is 3-bit reversed BGR
+r2, r6 = range(1,-1,-1), range(5,-1,-1)
+for b in r2:
+    for g in r2:
+        for r in r2:
+            clut.extend([255*r, 255*g, 255*b])
+# 7..10 is: #808080, #a0a0a4, #fffbf0, #fffffe
+clut[-3:] = [128]*3 + [160,160,164, 255,251,240]
+# 11..225 is a reversed 6x6x6 RGB cube (216-2 colors)
+for r in r6:
+    for g in r6:
+        for b in r6:
+            clut.extend([51*r, 51*g, 51*b])
+clut[32] -= 1
+# 226..245 are all #000001
+# 246..249 are #ddd, #a6caf0, #c0dcc0, #c0c0c0
+clut[-3:] = [0,0,1]*20 + [221]*3 + [166,202,240, 192,220,192]
+# 250..255 is 3-bit reversed half BGR
+for b in r2:
+    for g in r2:
+        for r in r2:
+            clut.extend([128*r, 128*g, 128*b])
+clut[-24:-21] = [192]*3
+clut = bytes(clut)
+
+def make_8bit_rbg_image(width, height, fullwidth, data, clut=clut):
+    color_data = b""
+    for c in data: # outer white is transparent
+        nr = c*3
+        color_data += clut[nr:nr+3]
     return pyglet.image.ImageData(width, height, 'RGB', color_data, -3*fullwidth)
+
+def bit_iterator(data):
+    for c in data:
+        for i in range(7,-1,-1):
+            yield (c>>i)&1
+
+def bpp_iterator(data, width, fullwidth, bpp):
+    while data:
+        no = b = 0
+        yc = 0
+        for bit in bit_iterator(data[:fullwidth]):
+            b=b<<1|bit
+            no += 1
+            if no != bpp: continue
+
+            yield b
+            b = 0
+            no = 0
+            yc += 1
+            if yc == width:
+                break
+        data = data[fullwidth:]
+
+def make_clut_image(width, height, fullwidth, data, clut, bpp):
+    if bpp == 8:
+        return make_8bit_rbg_image(width, height, fullwidth, data, clut)
+    else:
+        return make_8bit_rbg_image(width, height, width, bpp_iterator(data, width, fullwidth, bpp), clut)
 
 scale_table_31_to_255 = map(lambda v: (v*255)//31 , range(32))
 

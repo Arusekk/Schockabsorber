@@ -23,6 +23,7 @@ def print_spritevectors(movie):
         for scr in cursor.get_frame_scripts():
             ((libnr,memnr),extra) = scr
             scr_member = movie.castlibs.get_cast_member(libnr, membernr)
+            if scr_member is None: continue
             print "  -> Script %s: %s (%d)" % ((libnr,memnr), scr_member.name, extra)
 
         for snr in range(frames.sprite_count):
@@ -56,9 +57,16 @@ def show_images(movie):
             (w,h) = castdata.dims
             (tw,th) = castdata.total_dims
             bpp = castdata.bpp
-            image = shockabsorber.loader.rle.rle_to_image(w,h, tw, bpp, media.data)
+            clut = None
+            if castdata.palette > 0: # TODO: -101 is Windows system palette
+                clut = cl.get_cast_member(castdata.palette)
+                if clut and 'CLUT' not in clut.media:
+                    print("No CLUT media in a palette!")
+                clut = clut and clut.media.get('CLUT')
+                clut = clut and clut.data[::2]
+            image = shockabsorber.loader.rle.bytes_to_image((w,h, tw, bpp, media.decoded), clut=clut)
             images.append(image)
-            if len(images)>50: break
+            #if len(images)>50: break
     print "Image count: %d" % len(images)
 
     W = 8000; H = 1200
@@ -94,16 +102,16 @@ def show_frames(movie):
         (w,h) = castdata.dims
         (tw,th) = castdata.total_dims
         bpp = castdata.bpp
-        return shockabsorber.loader.rle.rle_decode(w,h, tw, bpp, media.data)
+        return (w,h, tw, bpp, media.decoded)
 
     loaded_images = {}
-    def get_image(member_ref, ink):
+    def get_image(member_ref, ink, clut):
         cache_key = (member_ref,ink)
         if not (cache_key in loaded_images):
             (libnr, membernr) = member_ref
             member = movie.castlibs.get_cast_member(libnr, membernr)
             if ink != 9: # not Mask
-                image = shockabsorber.loader.rle.bytes_to_image(rle_decode_member(member))
+                image = shockabsorber.loader.rle.bytes_to_image(rle_decode_member(member), clut=clut)
             else:
                 mask_member = movie.castlibs.get_cast_member(libnr, membernr+1)
                 image_data = rle_decode_member(member)
@@ -124,7 +132,15 @@ def show_frames(movie):
                 (libnr, membernr) = sprite.member_ref
                 member = movie.castlibs.get_cast_member(libnr, membernr)
                 if member!=None and member.type==1:
-                    image = get_image(sprite.member_ref, sprite.ink)
+                    clut = None
+                    castdata = member.castdata
+                    if castdata.palette > 0:
+                        clut = movie.castlibs.get_cast_member(libnr, castdata.palette)
+                        clut = clut and clut.media.get('CLUT')
+                        if clut and clut.data[::2] != clut.data[1::2]:
+                            raw_input(repr(clut.data))
+                        clut = clut and clut.data[::2]
+                    image = get_image(sprite.member_ref, sprite.ink, clut)
                     if image==None:
                         #print "DB| image==None for member_ref %s" % (sprite.member_ref,)
                         continue
@@ -150,12 +166,81 @@ def show_frames(movie):
         draw_frame(ani_state["fnr"])
         fnr_label.draw()
 
+    @window.event
+    def on_mouse_press(x, y, btn, mod):
+        update(1)
+
     def update(dt):
         ani_state["fnr"] += 1
         fnr = ani_state["fnr"]
         fnr_label.text = "Frame %d" % fnr
         on_draw()
 
-    pyglet.clock.schedule_interval(update, 0.1)
+    #pyglet.clock.schedule_interval(update, 0.1)
+
+    pyglet.app.run()
+
+def print_types(movie):
+    for cl in movie.castlibs.iter_by_nr():
+        print("==== Cast library \"%s\": ====" % (cl.name,))
+        if cl.castmember_table==None: continue
+
+        s = set()
+        for cm in cl.castmember_table:
+            if cm==None: continue
+            s.update(cm.media)
+        print(s)
+
+def show_filmloop(movie):
+    pass
+
+def show_audio(movie):
+    from subprocess import Popen, PIPE
+    sounds = []
+    for cl in movie.castlibs.iter_by_nr():
+        print("==== Cast library \"%s\": ====" % (cl.name,))
+        if cl.castmember_table==None: continue
+
+        for i,cm in enumerate(cl.castmember_table):
+            if cm==None: continue
+            print "%d: Loading sound \"%s\"" % (i, cm.name)
+            if 'snd ' in cm.media:
+                pass # TODO: looks like random garbage, possibly raw PCM, but what format?
+            if not 'ediM' in cm.media: continue
+            castdata = cm.castdata
+            media = cm.media['ediM']
+            if media.media_type != 'MP3': continue
+            sounds.append((media.music, cm))
+    W = 1024; H = 768
+    window = pyglet.window.Window(width=W, height=H)
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+    nr_label = pyglet.text.Label(font_size=30, x=25, y=25, color=(255,255,0,0))
+
+    ani_state = {"nr": -1}
+    @window.event
+    def on_draw():
+        window.clear()
+        nr_label.draw()
+
+    @window.event
+    def on_mouse_press(x, y, btn, mod):
+        update(1)
+
+    def update(dt):
+        ani_state["nr"] += 1
+        nr = ani_state["nr"]
+        nr_label.text = "Sound %d" % nr
+        on_draw()
+        #sounds[nr].play()
+        #mixer.music.load(sounds[nr])
+        #mixer.music.play()
+        print(repr(sounds[nr][1]))
+        Popen(['ffplay', '-v', '0', '-showmode', '0', '-autoexit', '-'],
+              stdin=PIPE).communicate(sounds[nr][0])
+    #mixer.init()
+
+    update(1)
 
     pyglet.app.run()

@@ -11,10 +11,12 @@ class CastLibraryTable: #------------------------------
         return self.by_nr.itervalues()
 
     def get_cast_library(self, lib_nr):
-        return self.by_nr[lib_nr]
+        if lib_nr not in self.by_nr:
+            print("XXXXX No castlib: #%d" % (lib_nr,))
+        return self.by_nr.get(lib_nr)
 
     def get_cast_member(self, lib_nr, member_nr):
-        cast_lib = self.by_nr[lib_nr]
+        cast_lib = self.get_cast_library(lib_nr)
         return cast_lib.get_cast_member(member_nr) if cast_lib != None else None
 #--------------------------------------------------
 
@@ -41,5 +43,9 @@ class CastLibrary: #------------------------------
 
     def get_cast_member(self, member_nr):
         if self.castmember_table == None: return None # TODO: Ensure loaded
-        return self.castmember_table[member_nr-1]
+        try:
+            return self.castmember_table[member_nr-1]
+        except IndexError:
+            print("XXXXX No cast member: #%d" % (member_nr,))
+            return None
 #--------------------------------------------------

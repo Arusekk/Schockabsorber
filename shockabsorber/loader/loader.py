@@ -3,6 +3,7 @@
 # Parse D*R files.
 # Individual envelope formats are handled elsewhere (dxr_envelope etc.).
 
+import os
 import struct
 from shockabsorber.model.sections import Section, SectionMap, AssociationTable
 from shockabsorber.model.cast import CastLibrary, CastLibraryTable
@@ -83,7 +84,7 @@ class CastMember: #------------------------------
         attrs = []
         for i in range(len(offsets)-1):
             attr = blob_after_table[offsets[i]:offsets[i+1]]
-            print "DB|   Cast member attr #%d: <%s>" % (i, attr)
+            print "DB|   Cast member attr #%d: <%r>" % (i, attr)
             attrs.append(attr)
 
         if len(attrs)>=2 and len(attrs[1])>0:
@@ -103,10 +104,27 @@ class CastMember: #------------------------------
     def parse_castdata(type, cast_id, buf, attrs):
         if type==1:
             return ImageCastType.parse(buf)
+        elif type==2:
+            return FilmloopCastType.parse(buf, cast_id, attrs)
+        elif type==3: # whatever it could mean
+            return FieldCastType.parse(buf, cast_id, attrs)
+        elif type==4:
+            return PaletteCastType.parse(buf, cast_id, attrs)
+        elif type==6:
+            return AudioCastType.parse(buf, cast_id, attrs)
+        elif type==7:
+            return ButtonCastType.parse(buf, cast_id, attrs)
+        elif type==8:
+            return VshapeCastType.parse(buf, cast_id, attrs)
         elif type==11:
             return ScriptCastType.parse(buf, cast_id)
+        elif type==15:
+            return XmedCastType.parse(buf.peek_bytes_left(), cast_id, attrs)
         else:
-            return ("Unknown cast type", cast_id, attrs, buf.peek_bytes_left())
+            print(type)
+            import code
+            code.interact(local=locals())
+            return ("Unknown cast type", type, cast_id, attrs, buf.peek_bytes_left())
 
 class CastType: #--------------------
     def __repr__(self):
@@ -115,25 +133,29 @@ class CastType: #--------------------
     def repr_extra(self): return ""
 
 class ImageCastType(CastType): #--------------------
-    def __init__(self, dims, total_dims, anchor, bpp, misc):
+    def __init__(self, dims, total_dims, anchor, bpp, palette, misc):
         self.dims = dims
         self.total_dims = total_dims
         self.anchor = anchor
         self.bpp = bpp # Bits per pixel
+        self.palette = palette
         print "DB| ImageCastType: misc=%s\n  dims=%s total_dims=%s anchor=%s" % (misc, dims, total_dims, anchor)
         self.misc = misc
 
     def repr_extra(self):
-        return " dims=%s anchor=%s bpp=%d misc=%s" % (
-            self.dims, self.anchor, self.bpp, self.misc)
+        return " dims=%s total_dims=%s anchor=%s bpp=%d palette=%d misc=%s" % (
+            self.dims, self.total_dims, self.anchor, self.bpp, self.palette, self.misc)
 
     def get_anchor(self): return self.anchor
 
     @staticmethod
     def parse(buf):
+        le = len(buf.peek_bytes_left())
+        if le < 28:
+            buf.buf += b'\0\xff\0\0\0\0'[le-28:]
         [v10,v11, height,width,v12,v13,v14, anchor_x,anchor_y,
-         v15,bits_per_pixel,v17
-        ] = buf.unpack('>Hi HH ihh hh bbi')
+         v15,bits_per_pixel,v17,palette
+        ] = buf.unpack('>Hi HH ihh hh bbhh')
         total_width = v10 & 0x7FFF
         v10 = "0x%x" % v10
         v12 = "0x%x" % v12
@@ -143,7 +165,33 @@ class ImageCastType(CastType): #--------------------
                              (total_width,height),
                              (anchor_x, anchor_y),
                              bits_per_pixel,
-                             misc)
+                             palette, misc)
+
+#--------------------------------------------------
+
+class PaletteCastType(CastType): #--------------------
+    def __init__(self, *args):
+        self.args = args
+
+    def repr_extra(self):
+        return " args=%r" % (self.args,)
+
+    @staticmethod
+    def parse(buf, *args):
+        return PaletteCastType(buf.peek_bytes_left(), *args)
+
+#--------------------------------------------------
+
+class AudioCastType(CastType): #--------------------
+    def __init__(self, *args):
+        self.args = args
+
+    def repr_extra(self):
+        return " args=%r" % (self.args,)
+
+    @staticmethod
+    def parse(*args):
+        return AudioCastType(*args)
 
 #--------------------------------------------------
 
@@ -164,6 +212,76 @@ class ScriptCastType(CastType): #--------------------
 
 #--------------------------------------------------
 
+class VshapeCastType(CastType): #--------------------
+    def __init__(self, *args):
+        self.args = args
+
+    def repr_extra(self):
+        return " args=%r" % (self.args,)
+
+    @staticmethod
+    def parse(*args):
+        return VshapeCastType(*args)
+
+#--------------------------------------------------
+
+class FilmloopCastType(CastType): #--------------------
+    def __init__(self, *args):
+        self.args = args
+
+    def repr_extra(self):
+        return " args=%r" % (self.args,)
+
+    @staticmethod
+    def parse(buf, *args):
+        [v1, v2, v3, v4, v5, v6] = buf.unpack('>HHHH IH')
+        misc = [v1, v2, v3, v4, (v5, v6)]
+        return FilmloopCastType(misc, *args)
+
+#--------------------------------------------------
+
+class FieldCastType(CastType): #--------------------
+    def __init__(self, *args):
+        self.args = args
+
+    def repr_extra(self):
+        return " args=%r" % (self.args,)
+
+    @staticmethod
+    def parse(*args):
+        return FieldCastType(*args)
+
+#--------------------------------------------------
+class ButtonCastType(CastType): #--------------------
+    def __init__(self, *args):
+        self.args = args
+
+    def repr_extra(self):
+        return " args=%r" % (self.args,)
+
+    @staticmethod
+    def parse(*args):
+        return ButtonCastType(*args)
+
+#--------------------------------------------------
+
+class XmedCastType(CastType): #--------------------
+    def __init__(self, *args):
+        self.args = args
+        self.dims = 64,18
+        self.bpp = 8
+        self.total_dims = self.dims[0]*self.bpp//8, self.dims[1]
+        self.palette = 0
+
+    def repr_extra(self):
+        return " args=%r" % (self.args,)
+
+    @staticmethod
+    def parse(*args):
+        return XmedCastType(*args)
+
+#--------------------------------------------------
+
 class Media: #------------------------------
     def __init__(self,snr,tag,data):
         self.snr = snr
@@ -180,14 +298,42 @@ class Media: #------------------------------
     def parse(snr,tag,blob):
         if tag=="BITD":
             return BITDMedia(snr,tag,blob)
+        elif tag=="ediM":
+            return ediMMedia(snr,tag,blob)
         else:
             return Media(snr,tag,blob)
+
+class ediMMedia(Media): #------------------------------
+    def __init__(self,snr,tag,blob):
+        Media.__init__(self,snr,tag,blob)
+        if blob.startswith(b'\xff\xd8'):
+            self.media_type = "JPEG"
+            self.hdr = None
+        else:
+            self.media_type = "MP3"
+            buf = SeqBuffer(blob)
+            [hdr_len] = buf.unpack('>I')
+            self.hdr = buf.readBytes(hdr_len)
+            self.music = buf.peek_bytes_left()
+
+    def repr_extra(self):
+        return " %s/%r"%(self.media_type, self.hdr)
 
 class BITDMedia(Media): #------------------------------
     def __init__(self,snr,tag,blob):
         Media.__init__(self,snr,tag,blob)
         buf = SeqBuffer(blob)
-        "TODO"
+        res = bytearray()
+        while not buf.at_eof():
+            [d] = buf.unpack('b')
+            if d < 0:
+                run_length = 1-d
+                v = buf.readBytes(1)
+                res.extend(v*run_length)
+            else:
+                lit_length = 1+d
+                res.extend(buf.readBytes(lit_length))
+        self.decoded = bytes(res)
 #--------------------------------------------------
 
 def load_movie(filename):
@@ -229,7 +375,7 @@ def load_file(f):
     else:
         raise Exception("Bad file type")
 
-    (castlibs, assoc_table) = read_singletons(sections_map, loader_context)
+    (castlibs, assoc_table, dir_config) = read_singletons(sections_map, loader_context)
     populate_cast_libraries(castlibs, assoc_table, sections_map, loader_context)
 
     # for e in sections_map.entries:
@@ -244,7 +390,7 @@ def load_file(f):
         castidx_order = parse_cast_order_section(castorder_e.bytes(), loader_context)
         for i,k in enumerate(castidx_order):
             (clnr, cmnr) = k
-            print "DB| Cast order #%d: %s -> %s" % (i, k, castlibs.by_nr[clnr].castmember_table[cmnr-1])
+            print "DB| Cast order #%d: %s -> %s" % (i, k, castlibs.get_cast_member(clnr, cmnr))
 
     return (loader_context, sections_map, castlibs, castidx_order)
 
@@ -256,7 +402,10 @@ def read_singletons(sections_map, loader_context):
     keys_e = sections_map.entry_by_tag("KEY*")
     assoc_table = parse_assoc_table(keys_e.bytes(), loader_context)
 
-    return (castlib_table, assoc_table)
+    drcf_e = sections_map.entry_by_tag("DRCF")
+    dir_config = parse_dir_config(drcf_e.bytes(), loader_context)
+
+    return (castlib_table, assoc_table, dir_config)
 
 def populate_cast_libraries(castlibs, assoc_table, sections_map, loader_context):
     for cl in castlibs.iter_by_nr():
@@ -349,3 +498,16 @@ def parse_cast_order_section(blob, loader_context):
         print "DB| parse_cast_order_section #%d: %s" % (i, (castlib_nr,castmember_nr))
         table.append((castlib_nr,castmember_nr))
     return table
+
+def parse_dir_config(blob, loader_context):
+    buf = SeqBuffer(blob, loader_context)
+    misc1 = buf.unpack('>32h')
+    misc2 = buf.unpack('>3i')
+    [palette] = buf.unpack('>i')
+    misc3 = buf.peek_bytes_left()
+    config = {
+        'palette': palette,
+        'misc': [misc1, misc2, misc3]
+    }
+    print("DB| parse_dir_config: %r" % (config,))
+    return config

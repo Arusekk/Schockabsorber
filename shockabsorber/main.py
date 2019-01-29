@@ -44,10 +44,13 @@ def castlib_resolver(rawpath):
 
 # For now, this is just a test program showing the bitmap images in a file.
 def main():
+    global movie
     movie = loader.load_movie(sys.argv[1])
     movie.resolve_cast_libraries(castlib_resolver)
 
     debug.print_castlibs(movie)
+    debug.print_types(movie)
 #    debug.show_images(movie)
+#    debug.show_audio(movie)
 #    debug.print_spritevectors(movie)
-    debug.show_frames(movie)
+#    debug.show_frames(movie)
