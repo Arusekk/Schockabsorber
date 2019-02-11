@@ -5,10 +5,11 @@
 
 import os
 import struct
+import time
 from shockabsorber.model.sections import Section, SectionMap, AssociationTable
 from shockabsorber.model.cast import CastLibrary, CastLibraryTable
 from shockabsorber.model.movie import Movie
-from shockabsorber.loader.util import SeqBuffer, rev
+from shockabsorber.loader.util import SeqBuffer, rev, half_expect
 from . import script_parser
 from . import score_parser
 import shockabsorber.loader.dxr_envelope
@@ -51,17 +52,24 @@ def parse_cast_table_section(blob, loader_context):
 #--------------------------------------------------
 
 class CastMember: #------------------------------
-    def __init__(self, section_nr, type, name, attrs, castdata):
+    def __init__(self, section_nr, type, name, ctime, mtime, attrs, castdata):
         self.media = {}
         self.type = type
         self.name = name
+        self.ctime = ctime
+        self.mtime = mtime
         self.attrs = attrs
         self.section_nr = section_nr
         self.castdata = castdata
 
     def __repr__(self):
-        return "<CastMember (@%d) type=%d name=\"%s\" attrs=%s meta=%s media=%s>" % \
-            (self.section_nr, self.type, self.name, self.attrs, self.castdata, self.media)
+        return "<CastMember (@%d) type=%d name=\"%s\" ctime=%s mtime=%s attrs=%s meta=%s media=%s>" % \
+            (self.section_nr, self.type, self.name, self.ctimes(), self.mtimes(), self.attrs, self.castdata, self.media)
+
+    def ctimes(self):
+        return self.ctime and time.ctime(self.ctime)
+    def mtimes(self):
+        return self.mtime and time.ctime(self.mtime)
 
     def add_media(self,tag,data):
         self.media[tag] = data
@@ -89,15 +97,26 @@ class CastMember: #------------------------------
 
         if len(attrs)>=2 and len(attrs[1])>0:
             name = SeqBuffer(attrs[1]).unpackString8()
+            attrs[1] = None
         else:
             name = None
+        if len(attrs)>=18 and len(attrs[17])==4:
+            [ctime] = struct.unpack('>I', attrs[17])
+            attrs[17] = None
+        else:
+            ctime = None
+        if len(attrs)>=19 and len(attrs[18])==4:
+            [mtime] = struct.unpack('>I', attrs[18])
+            attrs[18] = None
+        else:
+            mtime = None
 
-        print "DB| Cast-member common: name=\"%s\"  attrs=%s  misc=%s" % (
-            name, attrs, [v2,v3,v4,v5,v6, cast_id])
+        print "DB| Cast-member common: name=\"%s\" ctime=%s mtime=%s  attrs=%s  misc=%s" % (
+            name, ctime and time.ctime(ctime), mtime and time.ctime(mtime), attrs, [v2,v3,v4,v5,v6, cast_id])
         noncommon = buf.peek_bytes_left()
 
         castdata = CastMember.parse_castdata(type, cast_id, SeqBuffer(noncommon), attrs)
-        res = CastMember(snr,type, name, attrs, castdata)
+        res = CastMember(snr,type, name, ctime, mtime, attrs, castdata)
         return res
 
     @staticmethod
@@ -119,7 +138,7 @@ class CastMember: #------------------------------
         elif type==11:
             return ScriptCastType.parse(buf, cast_id)
         elif type==15:
-            return XmedCastType.parse(buf.peek_bytes_left(), cast_id, attrs)
+            return XmedCastType.parse(buf, cast_id, attrs)
         else:
             print(type)
             import code
@@ -266,19 +285,47 @@ class ButtonCastType(CastType): #--------------------
 #--------------------------------------------------
 
 class XmedCastType(CastType): #--------------------
-    def __init__(self, *args):
+    def __init__(self, med_type, info, *args):
+        self.med_type = med_type
+        self.info = info
         self.args = args
+
         self.dims = 64,18
         self.bpp = 8
         self.total_dims = self.dims[0]*self.bpp//8, self.dims[1]
         self.palette = 0
 
     def repr_extra(self):
-        return " args=%r" % (self.args,)
+        return " %s info=%r args=%r" % (self.med_type, self.info, self.args)
 
     @staticmethod
-    def parse(*args):
-        return XmedCastType(*args)
+    def parse(buf, *args):
+        [type_length] = buf.unpack('>I')
+        med_type = buf.readBytes(type_length)
+        [rest_length] = buf.unpack('>I')
+        info = buf.readBytes(rest_length)
+        buf = SeqBuffer(info)
+        if rest_length >= 4 and buf.readTag() == 'FLSH': # med_type == 'vectorShape'
+            [sz2] = buf.unpack('>I')
+            half_expect(sz2, rest_length, "XmedCastType.sz2")
+            misc = buf.unpack('>24i')
+            [npoints] = buf.unpack('>I')
+            misc2 = buf.unpack('>35i')
+            [proplen] = buf.unpack('>I')
+            propname = buf.readBytes(proplen)
+            points = []
+            for i in range(npoints):
+                if i:
+                    [vx] = buf.unpack('>i')
+                    half_expect(vx, -0x80000000, 'XmedCastType.vx')
+                pdesc = buf.unpack('>6i')
+                points.append(pdesc)
+            [proplen] = buf.unpack('>I')
+            propname = buf.readBytes(proplen)
+            half_expect(buf.peek_bytes_left(), b'', 'XmedCastType.trailer')
+            print("DB| XmedCastType.parse: misc=%r npoints=%r misc2=%r, points=%r"%(misc, npoints, misc2, points))
+            info = (misc, misc2, points)
+        return XmedCastType(med_type, info, *args)
 
 #--------------------------------------------------
 
@@ -300,6 +347,10 @@ class Media: #------------------------------
             return BITDMedia(snr,tag,blob)
         elif tag=="ediM":
             return ediMMedia(snr,tag,blob)
+        elif tag=="Thum":
+            return ThumMedia(snr,tag,blob)
+        elif tag=="XMED":
+            return XMEDMedia(snr,tag,blob)
         else:
             return Media(snr,tag,blob)
 
@@ -318,6 +369,31 @@ class ediMMedia(Media): #------------------------------
 
     def repr_extra(self):
         return " %s/%r"%(self.media_type, self.hdr)
+
+class ThumMedia(Media): #------------------------------
+    def __init__(self,snr,tag,blob):
+        Media.__init__(self,snr,tag,blob)
+        buf = SeqBuffer(blob)
+        [self.height, self.width] = buf.unpack('>II')
+        to_read = self.height*self.width
+        res = bytearray()
+        while len(res) < to_read and not buf.at_eof():
+            [d] = buf.unpack('b')
+            if d < 0:
+                run_length = 1-d
+                v = buf.readBytes(1)
+                res.extend(v*run_length)
+            else:
+                lit_length = 1+d
+                res.extend(buf.readBytes(lit_length))
+        self.decoded = bytes(res)
+
+    def repr_extra(self):
+        return " %dx%d"%(self.width, self.height)
+
+class XMEDMedia(Media): #------------------------------
+    def __init__(self,snr,tag,blob):
+        Media.__init__(self,snr,tag,blob)
 
 class BITDMedia(Media): #------------------------------
     def __init__(self,snr,tag,blob):

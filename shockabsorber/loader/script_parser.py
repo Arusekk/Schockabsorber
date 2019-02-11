@@ -7,15 +7,27 @@ from shockabsorber.model.scripts import ScriptNames
 
 def create_script_context(mmap, loader_context):
     lctx_e = mmap.entry_by_tag("LctX")
-    if lctx_e == None: return (None,None)
-    (lnam_sid, lscr_sids) = parse_lctx_section(lctx_e.bytes())
+    if lctx_e != None:
+        (lnam_sid, lscr_sids) = parse_lctx_section(lctx_e.bytes())
+        lnam_sids = [lnam_sid]
+    else:
+        lscr_sids = [sid for sid,mem in mmap.kv_iter() if mem and mem.tag == 'Lscr']
+        lnam_sids = [sid for sid,mem in mmap.kv_iter() if mem and mem.tag == 'Lnam']
+        print("DB| lnam_sids=%s" % (lnam_sids,))
 
-    lnam_e = mmap[lnam_sid]
-    names = parse_lnam_section(lnam_e.bytes())
+    names = None
+    for lnam_sid in lnam_sids:
+        lnam_e = mmap[lnam_sid]
+        new_names = parse_lnam_section(lnam_e.bytes())
+        if names:
+            names.entries += new_names.entries
+        else:
+            names = new_names
     print "DB| script names: %s" % names
     print "DB| lscr_sids=%s" % (lscr_sids,)
-    scripts = map(lambda sid: parse_lscr_section(sid,mmap[sid].bytes(), names),
-                  lscr_sids)
+    scripts = []
+    for sid in lscr_sids:
+        scripts.append(parse_lscr_section(sid,mmap[sid].bytes(), names))
     return (names,scripts)
 
 def parse_lctx_section(blob):
@@ -68,7 +80,6 @@ def parse_lscr_section(snr, blob, names):
     half_expect(v2, 0, "Lscr.v2")
     half_expect(totalLength2, totalLength, "Lscr.totalLength2")
     half_expect(header_length, 92, "Lscr.header_length")
-    #half_expect(v1, 0, "Lscr.v1")
     print "DB| Lscr extras: %s" % ([[v1,v2,totalLength,totalLength2],
                                     [header_length,script_id,count2],
                                     [v3,v4,v5,v6,v7,v8,v9,v10],
@@ -114,7 +125,7 @@ def parse_lscr_section(snr, blob, names):
         aux2 = subblob(blob, auxslice2)
         lines_blob = subblob(blob, lines_slice)
         code_blob = subblob(blob, code_slice)
-        print "DB| handler %s:\n    code-bin=<%s>\n    vars=%s\n    locals=%s\n    linetable=%s\n    aux=<%s>" % (
+        print "DB| handler %s:\n    code-bin=<%r>\n    vars=%s\n    locals=%s\n    linetable=%s\n    aux=<%s>" % (
             name, code_blob, arg_names, local_names, lines_blob, aux2)
         code = parse_lscr_code(code_blob, names, literals, arg_names, local_names)
         print "DB| handler %s:\n    code=%s" % (name, code)
@@ -178,23 +189,25 @@ def parse_lscr_varnames_table(blob, count, names):
     buf = SeqBuffer(blob)
     res = []
     for i in range(count):
-        [name_nr] = buf.unpack('>h')
+        [name_nr] = buf.unpack('>H')
         res.append(names[name_nr])
     return res
 
 OPCODE_SPEC = {
     0x01: ("Return", []),
+    0x02: ("Nop", []),
     0x03: ("Push-int-0", []),
     0x04: ("Multiply", []),
     0x05: ("Add", []),
     0x06: ("Subtract", []),
     0x07: ("Divide", []),
+    0x08: ("Modulo", []),
     0x09: ("Negate", []),
     0x0a: ("Concat-strings", []),
     0x0b: ("Concat-strings-with-space", []),
-    0x0c: ("Less-than?", []),
-    0x0e: ("Not-equals", []),
+    0x0c: ("Less-than", []),
     0x0d: ("Less-than-or-equals", []),
+    0x0e: ("Not-equals", []),
     0x0f: ("Equals", []),
 
     0x10: ("Greater-than", []),
@@ -203,6 +216,12 @@ OPCODE_SPEC = {
     0x13: ("OR(AND)?", []),
     0x14: ("NOT?", []),
     0x15: ("String-contains", []),
+    0x16: ("String-startswith", []),
+    0x17: ("Split-string", []),
+    0x18: ("Highlight-string", []),
+    0x19: ("Sprite-collision", []),
+    0x1a: ("Sprite-inside", []),
+    0x1b: ("String-cast", []),
     0x1e: ("Construct-linear-array", []),
     0x1f: ("Construct-assoc-array", []),
 
@@ -211,7 +230,7 @@ OPCODE_SPEC = {
     # Some instructions exist in an 8-bit and a 16-bit version.
     # Usually, the difference between the two opcodes is 0x40.
 
-    0x41: ("Push-int", ['int8']),       0xae: ("Push-int", ['int16']),
+    0x41: ("Push-int", ['int8']),       0x81: ("Push-int", ['int16']),
     0x42: ("Set-arg-count-void", ['int8']),
     0x43: ("Set-arg-count-return", ['int8']),
     0x44: ("Push-string", ['str8']),
@@ -245,6 +264,7 @@ OPCODE_SPEC = {
     0x66: ("Call-system-getter", ['sym8']), 0xa6: ("Call-system-getter", ['sym16']), # 'the'
     0x67: ("Call-method", ['sym8']),    0xa7: ("Call-method", ['sym16']),
     #0x6d: () -> number
+#           0xae: ("Push-int", ['int16']),
 
     0x70: ("Get-special-field", ['sym8']), 0xb0: ("Get-special-field", ['sym16']),
     0xb2: ("int16 ???", ['int16']),
@@ -253,7 +273,7 @@ OPCODE_SPEC = {
 }
 
 def parse_lscr_code(blob, names, strings, arg_names, local_names):
-    print "DB| handler code blob (length %d): <%s>" % (len(blob), blob)
+    print "DB| handler code blob (length %d): <%r>" % (len(blob), blob)
     buf = SeqBuffer(blob)
     res = []
     while not buf.at_eof():

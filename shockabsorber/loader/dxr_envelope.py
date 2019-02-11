@@ -21,6 +21,11 @@ def find_and_read_section(f, tag_to_find, loader_context):
         if tag==tag_to_find:
             blob = f.read(size)
             return parse_mmap_section(blob, f, loader_context)
+        elif tag=="imap":
+            blob = f.read(size)
+            buf = SeqBuffer(blob, loader_context.is_little_endian)
+            [_, mmap_ptr] = buf.unpack('>II', '<II')
+            f.seek(mmap_ptr)
         else:
             f.seek(size, 1)
 

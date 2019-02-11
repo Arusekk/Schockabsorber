@@ -22,7 +22,7 @@ def print_spritevectors(movie):
 
         for scr in cursor.get_frame_scripts():
             ((libnr,memnr),extra) = scr
-            scr_member = movie.castlibs.get_cast_member(libnr, membernr)
+            scr_member = movie.castlibs.get_cast_member(libnr, memnr)
             if scr_member is None: continue
             print "  -> Script %s: %s (%d)" % ((libnr,memnr), scr_member.name, extra)
 
@@ -31,7 +31,7 @@ def print_spritevectors(movie):
             if raw_sprite != bytearray(len(raw_sprite)):
                 sprite = cursor.get_sprite(snr)
                 print "---- Sprite #%d:" % snr
-                print "  raw=<%s>" % raw_sprite
+                print "  raw=<%r>" % raw_sprite
                 print "  %s" % sprite
                 if sprite.interval_ref > 0:
                     (castnr, membernr) = sprite.member_ref

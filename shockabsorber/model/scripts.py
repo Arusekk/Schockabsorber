@@ -14,5 +14,9 @@ class ScriptNames: #------------------------------
         return repr(entry_map)
 
     def __getitem__(self,idx):
-        return self.entries[idx]
+        try:
+            return self.entries[idx]
+        except IndexError:
+            print("XXXXXXXX wrong script name: %d > %d"%(idx, len(self.entries)))
+            return None
 #--------------------------------------------------
