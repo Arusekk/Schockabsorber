@@ -24,7 +24,7 @@ def print_spritevectors(movie):
             ((libnr,memnr),extra) = scr
             scr_member = movie.castlibs.get_cast_member(libnr, memnr)
             if scr_member is None: continue
-            print "  -> Script %s: %s (%d)" % ((libnr,memnr), scr_member.name, extra)
+            print "  -> Script %s: %s (%d)" % ((libnr,memnr), scr_member, extra)
 
         for snr in range(frames.sprite_count):
             raw_sprite = cursor.get_raw_sprite(snr)
@@ -131,26 +131,33 @@ def show_frames(movie):
             if sprite.interval_ref > 0:
                 (libnr, membernr) = sprite.member_ref
                 member = movie.castlibs.get_cast_member(libnr, membernr)
-                if member!=None and member.type==1:
+                (posX,posY) = sprite.get_pos()
+                (szX,szY) = sprite.get_size()
+                if member is None: continue
+                castdata = member.castdata
+                (ancX, ancY) = castdata.get_anchor()
+                bltX = posX-ancX; bltY = 768-(posY-ancY)
+                if member.type==1:
                     clut = None
-                    castdata = member.castdata
                     if castdata.palette > 0:
                         clut = movie.castlibs.get_cast_member(libnr, castdata.palette)
                         clut = clut and clut.media.get('CLUT')
-                        if clut and clut.data[::2] != clut.data[1::2]:
-                            raw_input(repr(clut.data))
                         clut = clut and clut.data[::2]
                     image = get_image(sprite.member_ref, sprite.ink, clut)
                     if image==None:
                         #print "DB| image==None for member_ref %s" % (sprite.member_ref,)
                         continue
-                    (posX,posY) = sprite.get_pos()
-                    (szX,szY) = sprite.get_size()
-                    (ancY, ancX) = member.castdata.get_anchor()
-                    bltX = posX-ancX; bltY = 768-(posY-ancY)
-                    #print "DB| blit: name=%s pos=%s anchor=%s size=%s blitpos=%s" % (
-                    #    member.get_name(), (posX,posY), (ancX,ancY), (szX,szY), (bltX,bltY))
-                    image.blit(bltX, bltY-szY)
+                elif member.type==15 and 'XMED' in member.media and member.media['XMED'].data[4:8]==b'\0\0\0\1':
+                    try:
+                        from oglgnash import widget
+                    except ImportError:
+                        continue
+                    image = widget(member.media['XMED'].data[12:])
+                else:
+                    continue
+                #print "DB| blit: name=%s pos=%s anchor=%s size=%s blitpos=%s" % (
+                #    member.get_name(), (posX,posY), (ancX,ancY), (szX,szY), (bltX,bltY))
+                image.blit(bltX, bltY-szY)
 
     W = 1024; H = 768
     window = pyglet.window.Window(width=W, height=H)

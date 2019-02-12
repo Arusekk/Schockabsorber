@@ -71,11 +71,11 @@ def parse_lscr_section(snr, blob, names):
     print "DB| Lscr section #%d:" % (snr,)
     buf = SeqBuffer(blob)
     [v1,v2,totalLength,totalLength2,
-     header_length, script_id, count2] = buf.unpack('>4i3H')
-    [v3,v4,v5,v6,v7,v8,v9,v10,hvec_length] = buf.unpack('>6ihhh')
-    [hvec_offset, flags56, props_count, props_offset, globs_count, globs_offset] = buf.unpack('>iiHiHi')
-    [handler_count, handler_offset] = buf.unpack('>Hi')
-    [literal_count, literal_offsets_offset, literals_length, literals_offset] = buf.unpack('>Hiii')
+     header_length, script_id, count2] = buf.unpack('>4i3H') # $00-$15
+    [v3,v4,v5,v6,v7,v8,v9,v10,hvec_length] = buf.unpack('>6ihhh') # $16-$33
+    [hvec_offset, flags56, props_count, props_offset, globs_count, globs_offset] = buf.unpack('>iiHiHi') # $34-$47
+    [handler_count, handler_offset] = buf.unpack('>Hi') # $48-$4D
+    [literal_count, literal_offsets_offset, literals_length, literals_offset] = buf.unpack('>Hiii') # $4E-$5C
     half_expect(v1, 0, "Lscr.v1")
     half_expect(v2, 0, "Lscr.v2")
     half_expect(totalLength2, totalLength, "Lscr.totalLength2")
@@ -125,9 +125,12 @@ def parse_lscr_section(snr, blob, names):
         aux2 = subblob(blob, auxslice2)
         lines_blob = subblob(blob, lines_slice)
         code_blob = subblob(blob, code_slice)
-        print "DB| handler %s:\n    code-bin=<%r>\n    vars=%s\n    locals=%s\n    linetable=%s\n    aux=<%s>" % (
+        print "DB| handler %s:\n    code-bin=<%r>\n    vars=%s\n    locals=%s\n    linetable=%r\n    aux=<%r>" % (
             name, code_blob, arg_names, local_names, lines_blob, aux2)
-        code = parse_lscr_code(code_blob, names, literals, arg_names, local_names)
+        try:
+            code = parse_lscr_code(code_blob, names, literals, arg_names, local_names)
+        except:
+            code = None
         print "DB| handler %s:\n    code=%s" % (name, code)
     return (literals,"TODO")
 
@@ -138,8 +141,11 @@ def parse_lscr_literals(table_blob, data_blob, count):
     res = []
     for i in range(count):
         [type,offset] = buf.unpack('>ii')
-        #print "DB|   parse_lscr_string_literals: #%d: type=%d offset=%d" % (i,type,offset)
-        [length] = int_struct.unpack_from(data_blob, offset)
+        print "DB|   parse_lscr_string_literals: #%d: type=%d offset=%d" % (i,type,offset)
+        if offset <= len(data_blob)-4:
+            [length] = int_struct.unpack_from(data_blob, offset)
+        else:
+            length = 0
         data = data_blob[offset+4 : offset+4+length]
         if type==1: # String
             lit = data
@@ -233,7 +239,7 @@ OPCODE_SPEC = {
     0x41: ("Push-int", ['int8']),       0x81: ("Push-int", ['int16']),
     0x42: ("Set-arg-count-void", ['int8']),
     0x43: ("Set-arg-count-return", ['int8']),
-    0x44: ("Push-string", ['str8']),
+    0x44: ("Push-string", ['str8']),    0x84: ("Push-string", ['str16']),
     0x45: ("Push-symbol", ['sym8']),    0x85: ("Push-symbol", ['sym16']),
     0x49: ("Push-global", ['sym8']),    0x89: ("Push-global", ['sym16']),
     0x4a: ("Push-property", ['sym8']),  0x8a: ("Push-property", ['sym16']),
@@ -252,6 +258,7 @@ OPCODE_SPEC = {
 
     0x56: ("Call-local", ['int8']),
     0x57: ("Call", ['sym8']),           0x97: ("Call", ['sym16']),
+    0x5b: ("Delete", ['sym8']),
     0x5c: ("Get-unnamed-builtin", ['int8']),
     0x5f: ("Get-the", ['sym8']),        0x9f: ("Get-the", ['sym16']),
 
@@ -264,7 +271,7 @@ OPCODE_SPEC = {
     0x66: ("Call-system-getter", ['sym8']), 0xa6: ("Call-system-getter", ['sym16']), # 'the'
     0x67: ("Call-method", ['sym8']),    0xa7: ("Call-method", ['sym16']),
     #0x6d: () -> number
-#           0xae: ("Push-int", ['int16']),
+           0xae: ("Push-int", ['int16']),
 
     0x70: ("Get-special-field", ['sym8']), 0xb0: ("Get-special-field", ['sym16']),
     0xb2: ("int16 ???", ['int16']),
@@ -287,6 +294,9 @@ def parse_lscr_code(blob, names, strings, arg_names, local_names):
                     [arg] = buf.unpack('b')
                 elif a=='str8':
                     [arg] = buf.unpack('B')
+                    arg = strings[arg]
+                elif a=='str16':
+                    [arg] = buf.unpack('>H')
                     arg = strings[arg]
                 elif a=='sym8':
                     [arg] = buf.unpack('B')

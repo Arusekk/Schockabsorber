@@ -239,8 +239,8 @@ class VshapeCastType(CastType): #--------------------
         return " args=%r" % (self.args,)
 
     @staticmethod
-    def parse(*args):
-        return VshapeCastType(*args)
+    def parse(buf, *args):
+        return VshapeCastType(buf.peek_bytes_left(), *args)
 
 #--------------------------------------------------
 
@@ -295,6 +295,9 @@ class XmedCastType(CastType): #--------------------
         self.total_dims = self.dims[0]*self.bpp//8, self.dims[1]
         self.palette = 0
 
+    def get_anchor(self):
+        return 0, 0
+
     def repr_extra(self):
         return " %s info=%r args=%r" % (self.med_type, self.info, self.args)
 
@@ -305,7 +308,7 @@ class XmedCastType(CastType): #--------------------
         [rest_length] = buf.unpack('>I')
         info = buf.readBytes(rest_length)
         buf = SeqBuffer(info)
-        if rest_length >= 4 and buf.readTag() == 'FLSH': # med_type == 'vectorShape'
+        if rest_length >= 4 and buf.readTag() == 'FLSH' and med_type == 'vectorShape':
             [sz2] = buf.unpack('>I')
             half_expect(sz2, rest_length, "XmedCastType.sz2")
             misc = buf.unpack('>24i')
@@ -360,12 +363,15 @@ class ediMMedia(Media): #------------------------------
         if blob.startswith(b'\xff\xd8'):
             self.media_type = "JPEG"
             self.hdr = None
-        else:
+        elif blob.startswith(b'\0\0\1@'):
             self.media_type = "MP3"
             buf = SeqBuffer(blob)
             [hdr_len] = buf.unpack('>I')
             self.hdr = buf.readBytes(hdr_len)
             self.music = buf.peek_bytes_left()
+        else:
+            self.media_type = repr(blob[:16])
+            self.hdr = None
 
     def repr_extra(self):
         return " %s/%r"%(self.media_type, self.hdr)
