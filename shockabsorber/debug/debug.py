@@ -4,53 +4,53 @@ import shockabsorber.loader.rle
 from pyglet.gl import *
 
 def print_castlibs(movie):
-    for cl in movie.castlibs.iter_by_nr():
-        print "==== Cast library \"%s\": ====" % (cl.name,)
+    for _,cl in movie.castlibs.iter_by_nr():
+        print("==== Cast library \"%s\": ====" % (cl.name,))
         if cl.castmember_table==None: continue
 
         for i,cm in enumerate(cl.castmember_table):
             if cm==None: continue
-            print "Cast table entry #%d: %s" % (i,cm)
+            print("Cast table entry #%d: %s" % (i,cm))
 
 def print_spritevectors(movie):
     frames = movie.frames
     if frames==None: return
     cursor = frames.create_cursor()
     for fnr in range(1,1+frames.frame_count()):
-        print "==== Frame #%d: ====" % fnr
+        print("==== Frame #%d: ====" % fnr)
         cursor.go_to_frame(fnr)
 
         for scr in cursor.get_frame_scripts():
             ((libnr,memnr),extra) = scr
             scr_member = movie.castlibs.get_cast_member(libnr, memnr)
             if scr_member is None: continue
-            print "  -> Script %s: %s (%d)" % ((libnr,memnr), scr_member, extra)
+            print("  -> Script %s: %s (%d)" % ((libnr,memnr), scr_member, extra))
 
         for snr in range(frames.sprite_count):
             raw_sprite = cursor.get_raw_sprite(snr)
             if raw_sprite != bytearray(len(raw_sprite)):
                 sprite = cursor.get_sprite(snr)
-                print "---- Sprite #%d:" % snr
-                print "  raw=<%r>" % raw_sprite
-                print "  %s" % sprite
+                print("---- Sprite #%d:" % snr)
+                print("  raw=<%r>" % raw_sprite)
+                print("  %s" % sprite)
                 if sprite.interval_ref > 0:
                     (castnr, membernr) = sprite.member_ref
                     member = movie.castlibs.get_cast_member(castnr, membernr)
-                    print "  -> member: %s" % member
+                    print("  -> member: %s" % member)
                     if sprite.ink == 9:
                         member2 = movie.castlibs.get_cast_member(castnr, membernr+1)
                         if member2 != None:
-                            print "  -> mask: %s" % (member2.name)
+                            print("  -> mask: %s" % (member2.name))
 
 def show_images(movie):
     images = []
     for cl in movie.castlibs.iter_by_nr():
-        print "==== Cast library \"%s\": ====" % (cl.name,)
+        print("==== Cast library \"%s\": ====" % (cl.name,))
         if cl.castmember_table==None: continue
 
         for i,cm in enumerate(cl.castmember_table):
             if cm==None: continue
-            print "%d: Loading image \"%s\"" % (i, cm.name)
+            print("%d: Loading image \"%s\"" % (i, cm.name))
             if not 'BITD' in cm.media: continue
             castdata = cm.castdata
             media = cm.media['BITD']
@@ -67,7 +67,7 @@ def show_images(movie):
             image = shockabsorber.loader.rle.bytes_to_image((w,h, tw, bpp, media.decoded), clut=clut)
             images.append(image)
             #if len(images)>50: break
-    print "Image count: %d" % len(images)
+    print("Image count: %d" % len(images))
 
     W = 8000; H = 1200
     window = pyglet.window.Window(width=W, height=H)
@@ -92,7 +92,7 @@ def show_images(movie):
 
 def show_frames(movie):
     if movie.frames==None:
-        print "==== (No score.) ===="
+        print("==== (No score.) ====")
         return
 
     def rle_decode_member(member):
@@ -116,7 +116,7 @@ def show_frames(movie):
                 mask_member = movie.castlibs.get_cast_member(libnr, membernr+1)
                 image_data = rle_decode_member(member)
                 mask_data = rle_decode_member(mask_member)
-                print "DB| Masked-ink sprite: %s / %s" % (member.name, mask_member.name)
+                print("DB| Masked-ink sprite: %s / %s" % (member.name, mask_member.name))
                 image = shockabsorber.loader.rle.bytes_and_mask_to_image(image_data, mask_data)
             loaded_images[cache_key] = image
         return loaded_images[cache_key]
@@ -124,7 +124,7 @@ def show_frames(movie):
 
     cursor = movie.frames.create_cursor()
     def draw_frame(fnr):
-        print "==== Frame #%d ====" % fnr
+        print("==== Frame #%d ====" % fnr)
         cursor.go_to_frame(fnr)
         for snr in range(movie.frames.sprite_count):
             sprite = cursor.get_sprite(snr)
@@ -188,7 +188,7 @@ def show_frames(movie):
     pyglet.app.run()
 
 def print_types(movie):
-    for cl in movie.castlibs.iter_by_nr():
+    for _,cl in movie.castlibs.iter_by_nr():
         print("==== Cast library \"%s\": ====" % (cl.name,))
         if cl.castmember_table==None: continue
 
@@ -204,13 +204,13 @@ def show_filmloop(movie):
 def show_audio(movie):
     from subprocess import Popen, PIPE
     sounds = []
-    for cl in movie.castlibs.iter_by_nr():
+    for _,cl in movie.castlibs.iter_by_nr():
         print("==== Cast library \"%s\": ====" % (cl.name,))
         if cl.castmember_table==None: continue
 
         for i,cm in enumerate(cl.castmember_table):
             if cm==None: continue
-            print "%d: Loading sound \"%s\"" % (i, cm.name)
+            print("%d: Loading sound \"%s\"" % (i, cm.name))
             if 'snd ' in cm.media:
                 pass # TODO: looks like random garbage, possibly raw PCM, but what format?
             if not 'ediM' in cm.media: continue

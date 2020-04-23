@@ -8,7 +8,7 @@ class CastLibraryTable: #------------------------------
                 self.by_assoc_id[cl.assoc_id] = cl
 
     def iter_by_nr(self):
-        return self.by_nr.itervalues()
+        return self.by_nr.items()
 
     def get_cast_library(self, lib_nr):
         if lib_nr not in self.by_nr:

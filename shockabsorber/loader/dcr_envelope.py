@@ -38,7 +38,7 @@ class ZSectionImpl(CommonSectionImpl):  #------------------------------
 
     def read_bytes(self):
         file = self.file
-        print "DB| read_bytes (ZSectionImpl #%d): 0x%x+0x%x" % (self.nr, self.offset, self.size)
+        print("DB| read_bytes (ZSectionImpl #%d): 0x%x+0x%x" % (self.nr, self.offset, self.size))
         file.seek(self.offset)
         # xheader = file.read(8)
         # [tag,size] = struct.unpack('!4si', xheader)
@@ -67,7 +67,7 @@ class UncompSectionImpl(CommonSectionImpl):  #------------------------------
         self.file = file
 
     def read_bytes(self):
-        print "DB| DCR read_bytes: @%d+%d" % (self.offset, self.size)
+        print("DB| DCR read_bytes: @%d+%d" % (self.offset, self.size))
         file = self.file
         file.seek(self.offset)
         return file.read(self.size)
@@ -108,7 +108,7 @@ def parse_abmp_section(blob, file):
                                    repr_mode]))
         sections.append(ABMPEntry(id, tag, comp_size, offset, repr_mode))
 
-    print "Bytes left in ABMP section: %d" % buf.bytes_left()
+    print("Bytes left in ABMP section: %d" % buf.bytes_left())
     # print "Sums: %s" % [csum, usum]
     return sections
 #--------------------------------------------------
@@ -120,25 +120,25 @@ def create_section_map(f, loader_context):
         [stag] = struct.unpack('<4s', xsectheader)
         stag = rev(stag)
         ssize = read_varint(f)
-        print "stag=%s ssize=%d" % (stag, ssize)
+        print("stag=%s ssize=%d" % (stag, ssize))
         if ssize==0:
             break
         else:
             sect_data = f.read(ssize)
         if stag == "Fcdr" or stag == "FGEI":
             sect_data = zlib.decompress(sect_data)
-            print "ssize decompressed=%d" % (len(sect_data))
+            print("ssize decompressed=%d" % (len(sect_data)))
         elif stag == "ABMP":
             buf = SeqBuffer(sect_data)
             sect_data_null = buf.unpackVarint()
             sect_data_size = buf.unpackVarint()
             sect_data = zlib.decompress(buf.peek_bytes_left())
             del buf
-            print "ssize decompressed=%d=%d" % (sect_data_size, len(sect_data))
+            print("ssize decompressed=%d=%d" % (sect_data_size, len(sect_data)))
             abmp = parse_abmp_section(sect_data, f)
-            print "DB| ABMP: %s" % abmp
+            print("DB| ABMP: %s" % abmp)
         if stag != "ABMP":
-            print "DB| %s -> %s" % (stag, sect_data)
+            print ("DB| %s -> %s" % (stag, sect_data))
     section_base_pos = f.tell()
 
     # entries_by_nr = {}
@@ -151,7 +151,7 @@ def create_section_map(f, loader_context):
     ils_section_bytes = None
     for e in abmp:
         snr = e.nr
-        print "DB| section nr %s: %s" % (snr,e)
+        print("DB| section nr %s: %s" % (snr,e))
         if e.offset == -1:
             # Compressed, in ILS section.
             section = LateSectionImpl(snr,e.tag,e.size)
@@ -181,9 +181,9 @@ def create_section_map(f, loader_context):
                               sections)
 
     # print "Sections=%s" % (sections.keys())
-    print "Sections:"
+    print("Sections:")
     for e in sections:
-        print "  %d: %s" % (e.nr, e)
+        print("  %d: %s" % (e.nr, e))
 
     # Debug:
     # for snr in sections:

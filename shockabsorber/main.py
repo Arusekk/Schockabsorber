@@ -14,7 +14,7 @@ def castlib_resolver(rawpath):
 
     # Adapt to local OS:
     filepath = rawpath.replace(":", os.path.sep)
-    print "DB| castlib_resolver: path=<%s>" % filepath
+    print("DB| castlib_resolver: path=<%s>" % filepath)
 
     # Rebase:
     prefix_to_add = os.environ["SHOCKABSORBER_ROOT"]
@@ -34,12 +34,12 @@ def castlib_resolver(rawpath):
             castlib_file = try_path
             break
         else:
-            print "DB| Cast library file does not exist: %s" % try_path
+            print("DB| Cast library file does not exist: %s" % try_path)
     if castlib_file == None:
         raise Exception("Cast library not found: % s" % filepath)
     else:
         castlib = loader.load_cast_library(castlib_file)
-        print "DB| Resolved %s to %s" % (filepath, castlib)
+        print("DB| Resolved %s to %s" % (filepath, castlib))
         return castlib
 
 # For now, this is just a test program showing the bitmap images in a file.

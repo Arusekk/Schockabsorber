@@ -11,8 +11,8 @@ def create_script_context(mmap, loader_context):
         (lnam_sid, lscr_sids) = parse_lctx_section(lctx_e.bytes())
         lnam_sids = [lnam_sid]
     else:
-        lscr_sids = [sid for sid,mem in mmap.kv_iter() if mem and mem.tag == 'Lscr']
-        lnam_sids = [sid for sid,mem in mmap.kv_iter() if mem and mem.tag == 'Lnam']
+        lscr_sids = [sid for sid,mem in mmap.kv_iter() if mem and mem.tag == b'Lscr']
+        lnam_sids = [sid for sid,mem in mmap.kv_iter() if mem and mem.tag == b'Lnam']
         print("DB| lnam_sids=%s" % (lnam_sids,))
 
     names = None
@@ -23,8 +23,8 @@ def create_script_context(mmap, loader_context):
             names.entries += new_names.entries
         else:
             names = new_names
-    print "DB| script names: %s" % names
-    print "DB| lscr_sids=%s" % (lscr_sids,)
+    print("DB| script names: %s" % names)
+    print("DB| lscr_sids=%s" % (lscr_sids,))
     scripts = []
     for sid in lscr_sids:
         scripts.append(parse_lscr_section(sid,mmap[sid].bytes(), names))
@@ -35,17 +35,17 @@ def parse_lctx_section(blob):
     [v1, v2, nEntries, nEntries2] = buf.unpack('>4i') # Usually v1=v2=0
     [offset,v4] = buf.unpack('>2h') # Usually offset=96, v4=12
     [v5,v6,v7,lnam_section_id,validCnt,flags10,freePtr] = buf.unpack('>4i3h') # Usually v5=0, v6=1/3, v7=-1
-    print "DB| LctX entry_count=%d/%d valid_count=%d offset=%d freePtr=%d" % (nEntries, nEntries2, validCnt, offset, freePtr)
-    print "DB| LctX names: section #%d" % (lnam_section_id,)
-    print "DB| LctX extras: %s" % ([[v1,v2], [v4,v5,v6,v7,flags10]],)
+    print("DB| LctX entry_count=%d/%d valid_count=%d offset=%d freePtr=%d" % (nEntries, nEntries2, validCnt, offset, freePtr))
+    print("DB| LctX names: section #%d" % (lnam_section_id,))
+    print("DB| LctX extras: %s" % ([[v1,v2], [v4,v5,v6,v7,flags10]],))
 
     def read_entry():
         [w1, section_id, w2,w3] = buf.unpack('>ii2h')
-        print "DB|   LctX section entry: %s" % ([w1,section_id,w2,w3],)
+        print("DB|   LctX section entry: %s" % ([w1,section_id,w2,w3],))
         return section_id
 
     movie_handler_names = parse_handler_nr_vector(buf.buf[buf.tell() : offset], 27)
-    print "DB| LctX movie handlers: %s" % movie_handler_names
+    print("DB| LctX movie handlers: %s" % movie_handler_names)
 
     buf.seek(offset)
     lscr_sections = []
@@ -68,7 +68,7 @@ def parse_lnam_section(blob):
 #--------------------------------------------------
 
 def parse_lscr_section(snr, blob, names):
-    print "DB| Lscr section #%d:" % (snr,)
+    print("DB| Lscr section #%d:" % (snr,))
     buf = SeqBuffer(blob)
     [v1,v2,totalLength,totalLength2,
      header_length, script_id, count2] = buf.unpack('>4i3H') # $00-$15
@@ -80,18 +80,18 @@ def parse_lscr_section(snr, blob, names):
     half_expect(v2, 0, "Lscr.v2")
     half_expect(totalLength2, totalLength, "Lscr.totalLength2")
     half_expect(header_length, 92, "Lscr.header_length")
-    print "DB| Lscr extras: %s" % ([[v1,v2,totalLength,totalLength2],
+    print("DB| Lscr extras: %s" % ([[v1,v2,totalLength,totalLength2],
                                     [header_length,script_id,count2],
                                     [v3,v4,v5,v6,v7,v8,v9,v10],
-                                    [flags56]],)
-    print "DB| Lscr offsets: %s" % ([header_length, props_offset, globs_offset, handler_offset, literal_offsets_offset, literals_offset, hvec_offset, totalLength, len(buf.buf)],)
-    print "DB|   parts: %s" % ([("props",props_count,props_offset,props_offset+2*props_count),
+                                    [flags56]],))
+    print("DB| Lscr offsets: %s" % ([header_length, props_offset, globs_offset, handler_offset, literal_offsets_offset, literals_offset, hvec_offset, totalLength, len(buf.buf)],))
+    print("DB|   parts: %s" % ([("props",props_count,props_offset,props_offset+2*props_count),
                                 ("globs",globs_count,globs_offset,globs_offset+2*globs_count),
                                 ("handlers",handler_count, handler_offset, handler_offset+46*handler_count),
                                 ("literal-offsets", literal_count, literal_offsets_offset, literal_offsets_offset+8*literal_count),
                                 ("literals", literal_count, literals_length, literals_offset, literals_offset + literals_length),
                                 ("hvector", hvec_length, hvec_offset, hvec_offset+2*hvec_length),
-                                ("end", totalLength)],)
+                                ("end", totalLength)],))
 
     ## String offsets table:
     buf5 = SeqBuffer(buf.buf[literal_offsets_offset : literals_offset])
@@ -99,20 +99,20 @@ def parse_lscr_section(snr, blob, names):
     while not buf5.at_eof():
         [tmpa,tmpb] = buf5.unpack('>ii')
         res5.append((tmpa,tmpb))
-    print "DB| LcxT res5 (len=%d) = %s" % (len(res5), res5)
+    print("DB| LcxT res5 (len=%d) = %s" % (len(res5), res5))
 
-    print "DB| handler vector: %s" % (parse_handler_nr_vector(buf.buf[hvec_offset : hvec_offset+2*hvec_length], hvec_length),)
+    print("DB| handler vector: %s" % (parse_handler_nr_vector(buf.buf[hvec_offset : hvec_offset+2*hvec_length], hvec_length),))
 
-    print "DB| literal_count = %d handler_count = %d" % (literal_count,handler_count)
+    print("DB| literal_count = %d handler_count = %d" % (literal_count,handler_count))
 
     global_names = parse_lscr_varnames_table(subblob(blob, (globs_offset, globs_count), 2), globs_count, names)
     property_names = parse_lscr_varnames_table(subblob(blob, (props_offset, props_count), 2), props_count, names)
     literals = parse_lscr_literals(subblob(blob,(literal_offsets_offset, literal_count), 8),
                                    subblob(blob,(literals_offset,literals_length)),
                                    literal_count)
-    print "DB| Lscr.globals: %s" % (dict(enumerate(global_names)),)
-    print "DB| Lscr.properties: %s" % (dict(enumerate(property_names)),)
-    print "DB| Lscr.literals: %s" % (dict(enumerate(literals)),)
+    print("DB| Lscr.globals: %s" % (dict(enumerate(global_names)),))
+    print("DB| Lscr.properties: %s" % (dict(enumerate(property_names)),))
+    print("DB| Lscr.literals: %s" % (dict(enumerate(literals)),))
     handlers_meta = parse_lscr_handler_table(subblob(blob, (handler_offset, 46*handler_count)),
                                              handler_count, names)
     for h in handlers_meta:
@@ -125,13 +125,13 @@ def parse_lscr_section(snr, blob, names):
         aux2 = subblob(blob, auxslice2)
         lines_blob = subblob(blob, lines_slice)
         code_blob = subblob(blob, code_slice)
-        print "DB| handler %s:\n    code-bin=<%r>\n    vars=%s\n    locals=%s\n    linetable=%r\n    aux=<%r>" % (
-            name, code_blob, arg_names, local_names, lines_blob, aux2)
+        print("DB| handler %s:\n    code-bin=<%r>\n    vars=%s\n    locals=%s\n    linetable=%r\n    aux=<%r>" % (
+            name, code_blob, arg_names, local_names, lines_blob, aux2))
         try:
             code = parse_lscr_code(code_blob, names, literals, arg_names, local_names)
         except:
             code = None
-        print "DB| handler %s:\n    code=%s" % (name, code)
+        print("DB| handler %s:\n    code=%s" % (name, code))
     return (literals,"TODO")
 
 def parse_lscr_literals(table_blob, data_blob, count):
@@ -141,7 +141,7 @@ def parse_lscr_literals(table_blob, data_blob, count):
     res = []
     for i in range(count):
         [type,offset] = buf.unpack('>ii')
-        print "DB|   parse_lscr_string_literals: #%d: type=%d offset=%d" % (i,type,offset)
+        print("DB|   parse_lscr_string_literals: #%d: type=%d offset=%d" % (i,type,offset))
         if offset <= len(data_blob)-4:
             [length] = int_struct.unpack_from(data_blob, offset)
         else:
@@ -157,7 +157,7 @@ def parse_lscr_literals(table_blob, data_blob, count):
             [lit] = double_struct.unpack(data)
             # TODO: wrap
         else:
-            print "DB| Unknown literal type %d!" % (type,)
+            print("DB| Unknown literal type %d!" % (type,))
             lit = None
         #print "DB|   #%d/%d: \"%s\"" % (i,count,s)
         res.append(lit)
@@ -174,13 +174,13 @@ def parse_lscr_handler_table(blob, count, names):
         [v10, lines_count, lines_offset, v13] = buf.unpack('>hhii')
 
         handler_name = names[handler_name_nr]
-        print "DB| * handler_name = '%s' (0x%x)" % (handler_name, handler_name_nr)
-        print "DB|   subsections = %s" % ([(code_offset, code_length),
+        print("DB| * handler_name = '%s' (0x%x)" % (handler_name, handler_name_nr))
+        print("DB|   subsections = %s" % ([(code_offset, code_length),
                                            (argnames_offset, argname_count),
                                            (localnames_offset, localname_count),
                                            (offset7, length7),
-                                           (lines_offset, lines_count)],)
-        print "DB|   handler extras = %s" % ([v8, v10, v13],)
+                                           (lines_offset, lines_count)],))
+        print("DB|   handler extras = %s" % ([v8, v10, v13],))
         misc = [handler_nr, v8, v10, v13]
         res.append((handler_name,
                     (code_offset, code_length),
@@ -280,7 +280,7 @@ OPCODE_SPEC = {
 }
 
 def parse_lscr_code(blob, names, strings, arg_names, local_names):
-    print "DB| handler code blob (length %d): <%r>" % (len(blob), blob)
+    print("DB| handler code blob (length %d): <%r>" % (len(blob), blob))
     buf = SeqBuffer(blob)
     res = []
     while not buf.at_eof():
@@ -338,7 +338,7 @@ def parse_lscr_code(blob, names, strings, arg_names, local_names):
         else:
             opcode = ("UNKNOWN-OPCODE",opcode)
             args = []
-        print "DB|    code: %s" % ((codepos,opcode,args),)
+        print("DB|    code: %s" % ((codepos,opcode,args),))
         res.append((codepos,opcode,args))
     return res
 
