@@ -7,7 +7,7 @@ import struct
 
 class SeqBuffer:  #------------------------------
     def __init__(self,src, is_little_endian=False):
-        self.buf = buffer(src)
+        self.buf = memoryview(src)
         self.offset = 0
         self.is_little_endian = is_little_endian
 
@@ -32,7 +32,7 @@ class SeqBuffer:  #------------------------------
         [len] = self.unpack('B')
         str = self.buf[self.offset:self.offset+len]
         self.offset += len
-        return str
+        return bytes(str)
 
     def unpackVarint(self):
         acc = 0
@@ -74,7 +74,7 @@ def rev(s):
 
 def half_expect(actual_value, expected_value, name):
     if actual_value != expected_value:
-        print "Surprised: %s is not %s but %s." % (name, expected_value, actual_value)
+        print("Surprised: %s is not %s but %s." % (name, expected_value, actual_value))
 
 int_struct = struct.Struct('>i')
 double_struct = struct.Struct('>d')

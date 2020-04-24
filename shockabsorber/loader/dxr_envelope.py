@@ -8,7 +8,7 @@ from shockabsorber.model.sections import Section, SectionMap
 from shockabsorber.loader.util import SeqBuffer
 
 def create_section_map(f, loader_context):
-    return find_and_read_section(f, "mmap", loader_context)
+    return find_and_read_section(f, b"mmap", loader_context)
 
 def find_and_read_section(f, tag_to_find, loader_context):
     while True:
@@ -17,11 +17,11 @@ def find_and_read_section(f, tag_to_find, loader_context):
         tag = buf.readTag()
         [size] = buf.unpack('>i', '<i')
 
-        print("  tag=%s" % tag)
-        if tag==tag_to_find:
+        print("  tag=%s" % bytes(tag))
+        if bytes(tag)==tag_to_find:
             blob = f.read(size)
             return parse_mmap_section(blob, f, loader_context)
-        elif tag=="imap":
+        elif tag==b"imap":
             blob = f.read(size)
             buf = SeqBuffer(blob, loader_context.is_little_endian)
             [_, mmap_ptr] = buf.unpack('>II', '<II')
@@ -39,7 +39,7 @@ def parse_mmap_section(blob, file, loader_context):
         tag = buf.readTag()
         [size, offset, w1,w2, link] = buf.unpack('>IIhhi', '<IIhhi')
         #print("mmap entry: %s" % [tag, size, offset, w1,w2, link])
-        if tag=="free" or tag=="junk":
+        if tag==b"free" or tag==b"junk":
             section = NullSection(tag)
         else:
             section = SectionImpl(tag, size, offset, file, loader_context)

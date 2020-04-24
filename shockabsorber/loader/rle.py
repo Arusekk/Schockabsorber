@@ -17,7 +17,7 @@ def bytes_to_image(image_data, clut=None):
     elif bpp == 32:
         return make_32bit_rbg_image(width, height, fullwidth, pixdata)
     else:
-        print "Warning: RLE: Unknown bpp: %d" % bpp
+        print("Warning: RLE: Unknown bpp: %d" % bpp)
         return make_greyscale_image(width, height, fullwidth, pixdata)
 
 def bytes_and_mask_to_image(image_data, mask_data):
@@ -32,7 +32,7 @@ def bytes_and_mask_to_image(image_data, mask_data):
     elif bpp == 32 and bpp2 == 8:
         return make_32bit_rbg_masked_image(width,height,fullwidth, width2,height2,fullwidth2, pixdata, pixdata2)
     else:
-        print "Warning: RLE: Unknown bpp: %d / %d" % (bpp,bpp2)
+        print("Warning: RLE: Unknown bpp: %d / %d" % (bpp,bpp2))
         return make_greyscale_image(width, height, fullwidth, pixdata) # TODO
 
 def make_greyscale_image(width, height, fullwidth, data):

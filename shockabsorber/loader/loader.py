@@ -35,11 +35,11 @@ def parse_assoc_table(blob, loader_context):
         tag = buf.readTag()
         castlib_assoc_id = composite_id >> 16
         owner_section_id = composite_id & 0xFFFF
-        print "DB|   KEY* entry #%d: %s" % (i, [tag, owned_section_id, castlib_assoc_id, owner_section_id])
+        print ("DB|   KEY* entry #%d: %s" % (i, [bytes(tag), owned_section_id, castlib_assoc_id, owner_section_id]))
         if owner_section_id == 1024:
-            atable.add_library_section(castlib_assoc_id, owned_section_id, tag)
+            atable.add_library_section(castlib_assoc_id, owned_section_id, bytes(tag))
         else:
-            atable.add_cast_media(owner_section_id, owned_section_id, tag)
+            atable.add_cast_media(owner_section_id, owned_section_id, bytes(tag))
     return atable
 
 def parse_cast_table_section(blob, loader_context):
@@ -92,7 +92,7 @@ class CastMember: #------------------------------
         attrs = []
         for i in range(len(offsets)-1):
             attr = blob_after_table[offsets[i]:offsets[i+1]]
-            print "DB|   Cast member attr #%d: <%r>" % (i, attr)
+            print ("DB|   Cast member attr #%d: <%r>" % (i, attr))
             attrs.append(attr)
 
         if len(attrs)>=2 and len(attrs[1])>0:
@@ -111,8 +111,8 @@ class CastMember: #------------------------------
         else:
             mtime = None
 
-        print "DB| Cast-member common: name=\"%s\" ctime=%s mtime=%s  attrs=%s  misc=%s" % (
-            name, ctime and time.ctime(ctime), mtime and time.ctime(mtime), attrs, [v2,v3,v4,v5,v6, cast_id])
+        print("DB| Cast-member common: name=\"%s\" ctime=%s mtime=%s  attrs=%s  misc=%s" % (
+            name, ctime and time.ctime(ctime), mtime and time.ctime(mtime), attrs, [v2,v3,v4,v5,v6, cast_id]))
         noncommon = buf.peek_bytes_left()
 
         castdata = CastMember.parse_castdata(type, cast_id, SeqBuffer(noncommon), attrs)
@@ -158,7 +158,7 @@ class ImageCastType(CastType): #--------------------
         self.anchor = anchor
         self.bpp = bpp # Bits per pixel
         self.palette = palette
-        print "DB| ImageCastType: misc=%s\n  dims=%s total_dims=%s anchor=%s" % (misc, dims, total_dims, anchor)
+        print("DB| ImageCastType: misc=%s\n  dims=%s total_dims=%s anchor=%s" % (misc, dims, total_dims, anchor))
         self.misc = misc
 
     def repr_extra(self):
@@ -178,7 +178,7 @@ class ImageCastType(CastType): #--------------------
         total_width = v10 & 0x7FFF
         v10 = "0x%x" % v10
         v12 = "0x%x" % v12
-        print "DB| ImageCastType.parse: ILE=%s %s" % (buf.is_little_endian, [(width, height), (total_width,height), bits_per_pixel])
+        print("DB| ImageCastType.parse: ILE=%s %s" % (buf.is_little_endian, [(width, height), (total_width,height), bits_per_pixel]))
         misc = ((v10,v11), (v12,v13,v14), (v15,v17))
         return ImageCastType((width, height),
                              (total_width,height),
@@ -218,7 +218,7 @@ class ScriptCastType(CastType): #--------------------
     def __init__(self, id, misc):
         self.id = id
         self.misc = misc
-        print "DB| ScriptCastType: id=#%d misc=%s" % (id, misc)
+        print("DB| ScriptCastType: id=#%d misc=%s" % (id, misc))
 
     def repr_extra(self):
         return " id=#%d misc=%s" % (self.id, self.misc)
@@ -308,7 +308,7 @@ class XmedCastType(CastType): #--------------------
         [rest_length] = buf.unpack('>I')
         info = buf.readBytes(rest_length)
         buf = SeqBuffer(info)
-        if rest_length >= 4 and buf.readTag() == 'FLSH' and med_type == 'vectorShape':
+        if rest_length >= 4 and buf.readTag() == b'FLSH' and med_type == 'vectorShape':
             [sz2] = buf.unpack('>I')
             half_expect(sz2, rest_length, "XmedCastType.sz2")
             misc = buf.unpack('>24i')
@@ -346,13 +346,13 @@ class Media: #------------------------------
 
     @staticmethod
     def parse(snr,tag,blob):
-        if tag=="BITD":
+        if tag==b"BITD":
             return BITDMedia(snr,tag,blob)
-        elif tag=="ediM":
+        elif tag==b"ediM":
             return ediMMedia(snr,tag,blob)
-        elif tag=="Thum":
+        elif tag==b"Thum":
             return ThumMedia(snr,tag,blob)
-        elif tag=="XMED":
+        elif tag==b"XMED":
             return XMEDMedia(snr,tag,blob)
         else:
             return Media(snr,tag,blob)
@@ -361,7 +361,7 @@ class ediMMedia(Media): #------------------------------
     def __init__(self,snr,tag,blob):
         Media.__init__(self,snr,tag,blob)
         if blob.startswith(b'\xff\xd8'):
-            self.media_type = "JPEG"
+            self.media_type = b"JPEG"
             self.hdr = None
         elif blob.startswith(b'\0\0\1@'):
             self.media_type = "MP3"
@@ -419,7 +419,7 @@ class BITDMedia(Media): #------------------------------
 #--------------------------------------------------
 
 def load_movie(filename):
-    with open(filename) as f:
+    with open(filename,'rb') as f:
         (loader_context, sections_map, castlibs, castidx_order) = load_file(f)
 
         script_ctx = script_parser.create_script_context(sections_map, loader_context)
@@ -429,30 +429,31 @@ def load_movie(filename):
         return Movie(castlibs=castlibs, frames=score, scripts="TODO")
 
 def load_cast_library(filename):
-    print "DB| load_cast_library: filename=%s" % filename
-    with open(filename) as f:
+    print("DB| load_cast_library: filename=%s" % filename)
+    with open(filename, 'rb') as f:
         (loader_context, sections_map, castlibs, castidx_order) = load_file(f)
 
         # TODO script_ctx = script_parser.create_script_context(sections_map, loader_context)
-        print "DB| load_cast_library: filename=%s" % filename
+        print("DB| load_cast_library: filename=%s" % filename)
         return castlibs.get_cast_library(0)
 
 def load_file(f):
     xheader = f.read(12)
     [magic,size,tag] = struct.unpack('!4si4s', xheader)
 
-    is_little_endian = (magic == "XFIR")
+    is_little_endian = (magic == b"XFIR")
     if is_little_endian:
         tag = rev(tag)
         magic = rev(magic)
-    if magic != "RIFX":
+
+    if magic != b"RIFX":
         raise Exception("Bad file type")
 
     loader_context = LoaderContext(tag, is_little_endian)
-    print "DB| Loader context: %s / %s" % (tag, is_little_endian)
-    if (tag=="MV93"):
+    print("DB| Loader context: %s / %s" % (tag, is_little_endian))
+    if (tag==b"MV93"):
         sections_map = shockabsorber.loader.dxr_envelope.create_section_map(f, loader_context)
-    elif (tag=="FGDM"):
+    elif (tag==b"FGDM"):
         sections_map = shockabsorber.loader.dcr_envelope.create_section_map(f, loader_context)
     else:
         raise Exception("Bad file type")
@@ -472,36 +473,36 @@ def load_file(f):
         castidx_order = parse_cast_order_section(castorder_e.bytes(), loader_context)
         for i,k in enumerate(castidx_order):
             (clnr, cmnr) = k
-            print "DB| Cast order #%d: %s -> %s" % (i, k, castlibs.get_cast_member(clnr, cmnr))
+            print("DB| Cast order #%d: %s -> %s" % (i, k, castlibs.get_cast_member(clnr, cmnr)))
 
     return (loader_context, sections_map, castlibs, castidx_order)
 
 def read_singletons(sections_map, loader_context):
-    mcsl_e = sections_map.entry_by_tag("MCsL")
+    mcsl_e = sections_map.entry_by_tag(b"MCsL")
     castlib_table = (CastLibraryTable([CastLibrary(0,None,None,0,None,1024)]) if mcsl_e==None else
                      parse_cast_lib_section(mcsl_e.bytes(), loader_context))
 
-    keys_e = sections_map.entry_by_tag("KEY*")
+    keys_e = sections_map.entry_by_tag(b"KEY*")
     assoc_table = parse_assoc_table(keys_e.bytes(), loader_context)
 
-    drcf_e = sections_map.entry_by_tag("DRCF")
+    drcf_e = sections_map.entry_by_tag(b"DRCF")
     dir_config = parse_dir_config(drcf_e.bytes(), loader_context)
 
     return (castlib_table, assoc_table, dir_config)
 
 def populate_cast_libraries(castlibs, assoc_table, sections_map, loader_context):
-    for cl in castlibs.iter_by_nr():
+    for _, cl in castlibs.iter_by_nr():
         # Read cast list:
         assoc_id = cl.assoc_id
-        if assoc_id==0 and cl.name<>None: continue
-        print "DB| populate_cast_libraries: sections: %s" % (assoc_table.get_library_sections(assoc_id),)
+        if assoc_id==0 and cl.name != None: continue
+        print("DB| populate_cast_libraries: sections: %s" % (assoc_table.get_library_sections(assoc_id),))
         castlist_section_id = assoc_table.get_library_sections(cl.assoc_id).get("CAS*")
         if castlist_section_id==None: continue
-        print "DB| populate_cast_libraries: CAS*-id=%d" % (castlist_section_id,)
+        print("DB| populate_cast_libraries: CAS*-id=%d" % (castlist_section_id,))
         castlist_e = sections_map[castlist_section_id]
 
         cast_idx_table = parse_cast_table_section(castlist_e.bytes(), loader_context)
-        print "DB| populate_cast_libraries: idx_table=%s" % (cast_idx_table,)
+        print("DB| populate_cast_libraries: idx_table=%s" % (cast_idx_table,))
 
         def section_nr_to_cast_member(nr):
             if nr==0: return None
@@ -511,12 +512,12 @@ def populate_cast_libraries(castlibs, assoc_table, sections_map, loader_context)
                                        assoc_table, sections_map)
             return castmember
         cast_table = map(section_nr_to_cast_member, cast_idx_table)
-        print "DB| populate_cast_libraries: cast_table=%s" % (cast_table,)
+        print("DB| populate_cast_libraries: cast_table=%s" % (cast_table,))
         cl.set_castmember_table(cast_table)
 
 def populate_cast_member_media(castmember, castlib_assoc_id, castmember_section_id, assoc_table, sections_map):
     medias = assoc_table.get_cast_media(castmember_section_id)
-    print "DB| populate_cast_member_media: %d,%d -> %s" % (castlib_assoc_id,castmember_section_id,medias)
+    print("DB| populate_cast_member_media: %d,%d -> %s" % (castlib_assoc_id,castmember_section_id,medias))
     for tag,media_section_id in medias.iteritems():
         media_section_e = sections_map[media_section_id]
         if media_section_e == None: continue
@@ -529,7 +530,7 @@ def parse_cast_lib_section(blob, loader_context):
     # Read header:
     buf = SeqBuffer(blob)
     [v1,nElems,ofsPerElem,nOffsets,v5] = buf.unpack('>iiHii')
-    print "DB| Cast lib section header: nElems=%d, nOffsets=%d, ofsPerElem=%d, misc=%s" % (nElems, nOffsets, ofsPerElem, [v1,v5])
+    print("DB| Cast lib section header: nElems=%d, nOffsets=%d, ofsPerElem=%d, misc=%s" % (nElems, nOffsets, ofsPerElem, [v1,v5]))
 
     # Read offset table:
     offsets = []
@@ -563,21 +564,21 @@ def parse_cast_lib_section(blob, loader_context):
             else:
                 item = subblob
             entry.append(item)
-        print "DB| Cast lib table entry #%d: %s" % (enr+1,entry)
+        print("DB| Cast lib table entry #%d: %s" % (enr+1,entry))
         [name, path, _zero, (low_idx,high_idx, assoc_id, self_idx)] = entry
         table.append(CastLibrary(enr+1, name, path, assoc_id, (low_idx,high_idx), self_idx))
 
     return CastLibraryTable(table)
 
 def parse_cast_order_section(blob, loader_context):
-    print "DB| parse_cast_order_section..."
+    print("DB| parse_cast_order_section...")
     buf = SeqBuffer(blob, loader_context)
     [_zero1, _zero2, nElems, nElems2, v5] = buf.unpack('>5i')
-    print "DB| parse_cast_order_section: header: %s" % ([_zero1, _zero2, nElems, nElems2, v5],)
+    print("DB| parse_cast_order_section: header: %s" % ([_zero1, _zero2, nElems, nElems2, v5],))
     table = []
     for i in range(nElems):
         [castlib_nr, castmember_nr] = buf.unpack('>HH')
-        print "DB| parse_cast_order_section #%d: %s" % (i, (castlib_nr,castmember_nr))
+        print("DB| parse_cast_order_section #%d: %s" % (i, (castlib_nr,castmember_nr)))
         table.append((castlib_nr,castmember_nr))
     return table
 
@@ -589,7 +590,7 @@ def parse_dir_config(blob, loader_context):
     misc3 = buf.peek_bytes_left()
     config = {
         'palette': palette,
-        'misc': [misc1, misc2, misc3]
+        'misc': [misc1, misc2, bytes(misc3)]
     }
     print("DB| parse_dir_config: %r" % (config,))
     return config
